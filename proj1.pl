@@ -1,0 +1,308 @@
+%next_player(Player1, Player2) - permite saber qual é o próximo jogador
+next_player(1,2).
+next_player(2,1).
+
+%play_game/0
+% Este predicado começa por criar um tabuleiro com a dimensao 6x6 e
+% validar a jogada do computador (player 1).
+play_game():-
+    initial_board(6, 6, B0),
+    play(1,B0).
+
+%play/1
+%O predicado play tem como argumentos o jogador que deve jogar e o tabuleiro sobre o qual deve fazer a sua jogada.
+% Este predicado e' recursivo de modo a permitir a alternancia das
+% jogadas. A sua implementaçao e constituida pela jogada do computador
+% (play(1,B)) , pela jogada do jogador (play(2,B)) e pela verificaçao
+% do fim do jogo.
+play(_,B0):-
+    game_over(B0,T),
+    calculate_board_value(T,Value),
+    print_board(B0),
+    write('Game Over!'),
+    nl,
+    display(Value),
+    !.
+
+play(1,B0):-
+    write('Player:'),nl,
+    print_board(B0),
+    alphabeta(B0,6,-100,100,B1,_,1),
+    !,
+    play(2,B1).
+
+play(2,B0):-
+    write('Computer:'),nl,
+    print_board(B0),
+    write('Where to play? (C,L)'),
+    read(C),
+    read(L),
+    valid_move(C,L,B0),
+    add_move(2,C,L,B0,B1),
+    !,
+    play(1,B1).
+
+%alphabeta/7
+%minimax-alpha-beta
+% O predicado que implementa o minimax e' chamado alfabeta e tem como
+% argumentos o tabuleiro, o valor de profundidade que ainda e' permitido
+% explorar, o alfa, o beta, o tabuleiro resultado, o score da avaliaçao
+% do resultado na o'tica do computador e o jogador que se esta' a
+% avaliar (minimizar ou a maximizar).
+alphabeta(Bi, 0, _, _, Bi, Value, P):-
+    calculate_board_heuristic(P,Bi,Value),
+    !.
+
+alphabeta(Bi, _, _, _, Bi, Value, _):-
+    game_over(Bi,T),
+    calculate_board_value(T,Value),
+    !.
+
+
+alphabeta(Bi, D, Alfa, Beta, Bf, Value, Player):-
+    next_player(Player,Other),
+    possible_moves(Player,Bi,L),
+    !,
+    evaluate_child(Other, L, D, Alfa, Beta, Bf, Value).
+
+%evaluate_child/7
+evaluate_child(Player, [B], D, Alfa, Beta, B, Value):-
+    D1 is D-1,
+    !,
+    alphabeta(B, D1, Alfa, Beta, _, Value, Player).
+
+
+evaluate_child(2, [Bi|T], D, Alfa, Beta,Bf, Value):-
+    D1 is D-1,
+    alphabeta(Bi, D1, Alfa, Beta, _, Value1, 2),
+    !,
+    evaluate_next_child_max(Value1,Bi, T, D, Alfa, Beta, Value, Bf).
+
+evaluate_child(1, [Bi|T], D, Alfa, Beta,Bf, Value):-
+    D1 is D-1,
+    alphabeta(Bi, D1, Alfa, Beta, _, Value1, 1),
+    !,
+    evaluate_next_child_min(Value1,Bi, T, D, Alfa, Beta, Value, Bf).
+
+%evaluate_next_child_max/8
+evaluate_next_child_max(Value1,Bi, T, D, Alfa, Beta, Value, Bf):-
+    Value1 < Beta,
+    max(Value1,Alfa,NewAlfa),
+    !,
+    evaluate_child(2, T, D, NewAlfa, Beta, B2, Value2),
+    max_board(Value1,Bi,Value2,B2,Value,Bf).
+
+evaluate_next_child_max(Value1,Bi, _, _, _, _, Value1, Bi):- !.
+
+%evaluate_next_child_min/8
+evaluate_next_child_min(Value1,Bi, T, D, Alfa, Beta, Value, Bf):-
+     Value1 > Alfa,
+     min(Value1,Beta,NewBeta),
+     !,
+     evaluate_child(1, T, D, Alfa, NewBeta, B2, Value2),
+     min_board(Value1,Bi,Value2,B2,Value,Bf).
+
+evaluate_next_child_min(Value1,Bi, _, _, _, _, Value1, Bi):- !.
+
+
+%possible_moves/3
+possible_moves(X,B,L):-
+    bagof(BP,generate_move(X,B,BP),L).
+
+%max_board/6
+max_board(Value1,B1,Value2,_,Value1,B1):-
+    Value1 >= Value2.
+
+max_board(Value1,_,Value2,B2,Value2,B2):-
+    Value1 < Value2.
+
+%min_board/6
+min_board(Value1,B1,Value2,_,Value1,B1):-
+    Value1 =< Value2.
+
+min_board(Value1,_,Value2,B2,Value2,B2):-
+    Value1 > Value2.
+
+%max/3
+max(X,Y,X):-
+    X>=Y,!.
+max(X,Y,Y):-
+    Y>X.
+%min/3
+min(X,Y,X):-
+    X=<Y,!.
+min(X,Y,Y):-
+    Y<X.
+
+%a)
+%initial_row/2
+initial_row(N, L):-
+    findall(0,between(1,N,_),L).
+
+%initial_board/3
+initial_board(RN, CN, L):-
+    initial_row(CN,RL),
+    findall([RL], between(1,RN,_),L).
+
+%b)
+%print_row/1
+print_row([]).
+print_row([X|T]):-
+   write(X),
+   print_row(T).
+
+%print_board/1
+print_board([]).
+print_board([X|T]):-
+    print_row(X),
+    nl,
+    print_board(T).
+
+%c)
+%valid_move/3
+valid_move(X,Y,Board):-
+   nth0(X,Board,L),
+   nth0(Y,L,0).
+
+%d)
+%add_move/5
+add_move(Player,X,Y,InitialBoard,FinalBoard):-
+    valid_move(X,Y,InitialBoard),
+    nth0(X,InitialBoard,R),
+    replace(Player,Y,R,R1),
+    replace(R1,X,InitialBoard,FinalBoard).
+
+%replace/4
+replace(X,0,[_|T],[X|T]).
+replace(X,N,[H|T],[H|R]):-
+    N1 is N-1, replace(X,N1,T,R).
+
+%e)
+%generate_move/3
+generate_move(Player,InitialBoard,FinalBoard):-
+    add_move(Player,_,_,InitialBoard,FinalBoard).
+
+%f)
+%get_column/3
+get_column([], _, []).
+get_column([X|T1], I, [Y|T2]) :- %extracts the Ith column (starts at 0)
+    nth0(I, X, Y),
+    get_column(T1, I, T2).
+
+%four_side_by_side/2
+four_side_by_side([X,X,X,X|_], X):-
+   \+(X is 0). %zeros are ignored
+four_side_by_side([_|T], X):-
+   four_side_by_side(T, X).
+
+%game_over/2
+game_over(Board,W):-%vertical
+    has_four_in_line_vertical(Board,0,W).
+game_over(Board,W):-%horizontal
+    has_four_in_line_horizontal(Board,W).
+game_over(Board,W):-%diagonal
+    has_four_in_line_diagonal(Board,W).
+game_over(Board, 0):- %empate
+   has_no_free_positions(Board).
+
+%has_no_free_positions/1
+has_no_free_positions([]).
+has_no_free_positions([X|T]):-
+   \+(nth0(_,X,0)),
+   has_no_free_positions(T).
+
+%has_four_in_line_vertical/3
+has_four_in_line_vertical(Board, I,W):- %4 vertical
+    length(Board,NmbRows),
+    I =< NmbRows,
+    get_column(Board, I, L), %get first column
+    four_side_by_side(L, W),!.
+has_four_in_line_vertical(Board,I,W):-
+    length(Board,NmbRows),
+    I =< NmbRows,
+    I2 is I +1,
+    has_four_in_line_vertical(Board, I2,W).
+
+%has_four_in_line_horizontal/2
+has_four_in_line_horizontal([X|_],W):-
+    length(X,NmbColumns),
+    NmbColumns >= 4, %has to have at least 4 columns
+    four_side_by_side(X,W),!.
+has_four_in_line_horizontal([_|T],W):- %4 horizontal
+    has_four_in_line_horizontal(T,W).
+
+%has_four_in_line_diagonal/2
+has_four_in_line_diagonal(Board,W):- %4 diagonal down
+    %get N in (X0,Y0)
+    nth0(Y0,Board,R0),
+    nth0(X0,R0,N0),
+
+    %get N in (X1,Y1)
+    Y1 is Y0+1, X1 is X0+1,
+    nth0(Y1,Board,R1),
+    nth0(X1,R1,N1),
+
+    %get N in (X2,Y2)
+    Y2 is Y0+2, X2 is X0+2,
+    nth0(Y2,Board,R2),
+    nth0(X2,R2,N2),
+
+    %get N in (X3,Y3)
+    Y3 is Y0+3, X3 is X0+3,
+    nth0(Y3,Board,R3),
+    nth0(X3,R3,N3),
+
+    \+(N0 = 0),
+    four_side_by_side([N0,N1,N2,N3],W),!.
+has_four_in_line_diagonal(Board,W):- %4 diagonal up
+     %get N in (X0,Y0)
+    nth0(Y0,Board,R0),
+    nth0(X0,R0,N0),
+
+    %get N in (X1,Y1)
+    Y1 is Y0+1, X1 is X0-1,
+    nth0(Y1,Board,R1),
+    nth0(X1,R1, N1),
+
+    %get N in (X2,Y2)
+    Y2 is Y0+2, X2 is X0-2,
+    nth0(Y2,Board,R2),
+    nth0(X2,R2, N2),
+
+    %get N in (X3,Y3)
+    Y3 is Y0+3, X3 is X0-3,
+    nth0(Y3,Board,R3),
+    nth0(X3,R3, N3),
+
+    \+(N0 = 0),
+    four_side_by_side([N0,N1,N2,N3],W),!.
+
+%g)
+%calculate_board_value/2
+calculate_board_value(Winner,1):-game_over(_,Winner).
+calculate_board_value(Winner,-1):-next_player(Winner,X),game_over(_,X).
+calculate_board_value(_,0). %no winners
+
+
+%h)
+%calculate_board_heuristic/3º
+calculate_board_heuristic(Player,Board,100):-
+    game_over(Board,Player),!. %Player has already won
+calculate_board_heuristic(Player,Board,40):-
+    add_move(Player,_,_,Board, Board0),
+    game_over(Board0,Player),!. %Player only needs to play once to win
+calculate_board_heuristic(Player,Board,20):-
+    add_move(Player,_,_,Board, Board0),
+    add_move(Player,_,_,Board0, Board1),
+    game_over(Board1,Player),!. %Player needs to play twice to win
+calculate_board_heuristic(Player,Board,10):-
+    add_move(Player,_,_,Board, Board0),
+    add_move(Player,_,_,Board0, Board1),
+    add_move(Player,_,_,Board1, Board2),
+    game_over(Board2,Player),!. %Player needs to play thrice to win
+calculate_board_heuristic(_,_,0).
+
+
+
+
+
